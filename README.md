@@ -1,1 +1,217 @@
-# Space-dot
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Space Dodger Mobile</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0b0b1e;
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        h1 {
+            margin: 10px 0 5px 0;
+            font-size: 22px;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px #00ffcc;
+        }
+        #gameCanvas {
+            border: 3px solid #00ffcc;
+            background-color: #050510;
+            box-shadow: 0 0 15px #00ffcc;
+            max-width: 95vw;
+            max-height: 70vh;
+            border-radius: 8px;
+        }
+        .instructions {
+            margin: 15px 0;
+            font-size: 13px;
+            color: #88aaee;
+            text-align: center;
+            max-width: 80%;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>SPACE DODGER</h1>
+    <canvas id="gameCanvas" width="360" height="500"></canvas>
+    <div class="instructions">Drag anywhere on screen to move the ship.<br>Tap when defeated to try again.</div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // Engine adjustments
+        let gameOver = false;
+        let score = 0;
+        let speedMultiplier = 1;
+
+        // Space Fighter Entity
+        const player = {
+            x: canvas.width / 2 - 15,
+            y: canvas.height - 65,
+            width: 30,
+            height: 30,
+            color: "#00ffcc"
+        };
+
+        // Hazard Array
+        const obstacles = [];
+        const obstacleSpawnRate = 35; 
+        let spawnTimer = 0;
+
+        // --- IPHONE TOUCH CONTROLS ---
+        function handleTouch(e) {
+            e.preventDefault(); 
+            if (gameOver) return;
+
+            const rect = canvas.getBoundingClientRect();
+            // Track the primary active finger touch position
+            const touch = e.touches[0];
+            
+            // Map the screen coordinates dynamically to canvas dimensions
+            const touchX = ((touch.clientX - rect.left) / rect.width) * canvas.width;
+            
+            // Slide player directly under finger tracking boundary
+            player.x = touchX - player.width / 2;
+
+            // Restrict from flying off-canvas margins
+            if (player.x < 0) player.x = 0;
+            if (player.x > canvas.width - player.width) player.x = canvas.width - player.width;
+        }
+
+        canvas.addEventListener("touchstart", (e) => {
+            if (gameOver) {
+                resetGame();
+            } else {
+                handleTouch(e);
+            }
+        }, { passive: false });
+
+        canvas.addEventListener("touchmove", handleTouch, { passive: false });
+        
+        // Desktop backup click for testing
+        canvas.addEventListener("click", () => {
+            if (gameOver) resetGame();
+        });
+
+        function resetGame() {
+            obstacles.length = 0;
+            score = 0;
+            speedMultiplier = 1;
+            player.x = canvas.width / 2 - 15;
+            gameOver = false;
+            animate();
+        }
+
+        function spawnObstacle() {
+            const size = Math.random() * 20 + 15; 
+            obstacles.push({
+                x: Math.random() * (canvas.width - size),
+                y: -size,
+                width: size,
+                height: size,
+                speed: (Math.random() * 2.5 + 2.5) * speedMultiplier,
+                color: "#ff3366"
+            });
+        }
+
+        function checkCollision(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.width &&
+                   rect1.x + rect1.width > rect2.x &&
+                   rect1.y < rect2.y + rect2.height &&
+                   rect1.y + rect1.height > rect2.y;
+        }
+
+        // Processing Pipeline Loop
+        function animate() {
+            if (gameOver) {
+                ctx.fillStyle = "rgba(5, 5, 20, 0.85)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.fillStyle = "#ff3366";
+                ctx.font = "bold 28px sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 20);
+                
+                ctx.fillStyle = "white";
+                ctx.font = "16px sans-serif";
+                ctx.fillText(`Score: ${score}`, canvas.width / 2, canvas.height / 2 + 20);
+                
+                ctx.fillStyle = "#00ffcc";
+                ctx.font = "14px sans-serif";
+                ctx.fillText("TAP TO RESTART", canvas.width / 2, canvas.height / 2 + 60);
+                return; 
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Render Player Fighter Ship
+            ctx.fillStyle = player.color;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = player.color;
+            ctx.beginPath();
+            ctx.moveTo(player.x + player.width / 2, player.y);
+            ctx.lineTo(player.x, player.y + player.height);
+            ctx.lineTo(player.x + player.width, player.y + player.height);
+            ctx.closePath();
+            ctx.fill();
+            ctx.shadowBlur = 0; // Reset canvas effects container for performance
+
+            // Asteroid Logic Generation
+            spawnTimer++;
+            if (spawnTimer >= obstacleSpawnRate) {
+                spawnObstacle();
+                spawnTimer = 0;
+            }
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let obs = obstacles[i];
+                obs.y += obs.speed;
+
+                ctx.fillStyle = obs.color;
+                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+
+                if (checkCollision(player, obs)) {
+                    gameOver = true;
+                }
+
+                if (obs.y > canvas.height) {
+                    obstacles.splice(i, 1);
+                    score++;
+                    if (score % 8 === 0) {
+                        speedMultiplier += 0.12; // Difficulty increases cleanly
+                    }
+                }
+            }
+
+            // Score Counter Presentation
+            ctx.fillStyle = "white";
+            ctx.font = "bold 16px sans-serif";
+            ctx.textAlign = "left";
+            ctx.fillText(`SCORE: ${score}`, 20, 35);
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
